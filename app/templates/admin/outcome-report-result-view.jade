@@ -11,12 +11,22 @@ style.
   }
 
   body {
-        user-select: none;
-        -moz-user-select: none;
-        -khtml-user-select: none;
-        -webkit-user-select: none;
-        -o-user-select: none;
-  } 
+    user-select: none;
+    -moz-user-select: none;
+    -khtml-user-select: none;
+    -webkit-user-select: none;
+    -o-user-select: none;
+  }
+
+  @media print {
+    a[href]:after {
+      content:none
+    }
+    a[href] {
+      color: #0b63bc !important;
+      text-decoration: underline;
+    }
+  }
 
 div.style-flat
   div.menu
@@ -30,23 +40,29 @@ div.style-flat
     div
       h4 Outcomes Report
       h5
-        | #{moment(view.options.startDate).format('MMM d, YYYY')}
-        | &ndash;
-        | #{moment(view.options.endDate).format('MMM d, YYYY')}
+        | #{view.options.startDate}
+        = " "
+        if view.options.endDate
+          | &ndash;
+          | #{view.options.endDate}
 
   div.address
-    p 
+    p
       b= view.options.schoolName
       if view.options.schoolAddress
-        span, #{view.options.schoolAddress}
+        span
+          |, #{view.options.schoolAddress}
+          
       br
-      b Teacher: 
+      b Teacher:
+      =" "
       if view.options.teacher.fullName
         | #{view.options.teacher.fullName} (#{view.options.teacher.email})
       else
         | #{view.options.teacher.email}
-    p.clear-both 
-      b Account Manager: 
+    p.clear-both
+      b Account Manager:
+      =" "
       | #{view.options.accountManager.fullName} (#{view.options.accountManager.email})
 
   div.block
@@ -125,13 +141,14 @@ div.style-flat
       p.
         At CodeCombat, we believe that students will be most prepared for both
         real-world computing jobs and further study of computer science by using
-        real, typed code in full programming languages, so instead of using blockbased
+        real, typed code in full programming languages, so instead of using block-based
         visual programming languages for beginners, we teach Python and
-        JavaScript –the same languages used widely today by companies ranging
+        JavaScript – the same languages used widely today by companies ranging
         from Google to the New York Times.
 
     div.bottom
       p Have question or want more information? We'd be happy to help.
       p
-        | Reach out your Account Manager at 
-        a(href="mailto:" + view.options.accountManager.email)= view.options.accountManager.email 
+        | Reach out your Account Manager at
+        =" "
+        a(href="mailto:" + view.options.accountManager.email)= view.options.accountManager.email

@@ -1,3 +1,4 @@
+require('app/styles/play/level/tome/spell-palette-view.sass')
 CocoView = require 'views/core/CocoView'
 {me} = require 'core/auth'
 filters = require 'lib/image_filter'
@@ -7,8 +8,8 @@ LevelComponent = require 'models/LevelComponent'
 ThangType = require 'models/ThangType'
 GameMenuModal = require 'views/play/menu/GameMenuModal'
 LevelSetupManager = require 'lib/LevelSetupManager'
-ace = require 'ace'
-utils = require 'core/utils'
+ace = require('lib/aceContainer')
+aceUtils = require 'core/aceUtils'
 
 N_ROWS = 4
 
@@ -24,7 +25,6 @@ module.exports = class SpellPaletteView extends CocoView
     'tome:change-language': 'onTomeChangedLanguage'
     'tome:palette-clicked': 'onPalleteClick'
     'surface:stage-mouse-down': 'hide'
-    'level:set-playing': 'hide'
 
 
   events:
@@ -39,7 +39,6 @@ module.exports = class SpellPaletteView extends CocoView
     @showsHelp = docs.specificArticles?.length or docs.generalArticles?.length
     @createPalette()
     $(window).on 'resize', @onResize
-    console.log "My thang is", @thang
 
   getRenderData: ->
     c = super()
@@ -101,7 +100,6 @@ module.exports = class SpellPaletteView extends CocoView
       @$el.toggleClass 'web-dev', @options.level.isType('web-dev')
 
     tts = @supermodel.getModels ThangType
-    console.log @deferredDocs
 
     for dn of @deferredDocs
       doc = @deferredDocs[dn]
@@ -338,11 +336,9 @@ module.exports = class SpellPaletteView extends CocoView
     @render()
 
   onSectionHeaderClick: (e) ->
-
-    $et = @$(e.target)
+    $et = @$(e.currentTarget)
     target = @$($et.attr('data-panel'))
     isCollapsed = !target.hasClass('in')
-    console.log "O", target[0], isCollapsed
     if isCollapsed
       target.collapse 'show'
       $et.find('.glyphicon').removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down')
@@ -376,13 +372,14 @@ module.exports = class SpellPaletteView extends CocoView
     content = @$el.find(".rightContentTarget")
     content.html(e.entry.doc.initialHTML)
     content.i18n()
+    @applyRTLIfNeeded()
     codeLanguage = e.entry.options.language
     oldEditor.destroy() for oldEditor in @aceEditors
     @aceEditors = []
     aceEditors = @aceEditors
     # Initialize Ace for each popover code snippet that still needs it
     content.find('.docs-ace').each ->
-      aceEditor = utils.initializeACE @, codeLanguage
+      aceEditor = aceUtils.initializeACE @, codeLanguage
       aceEditors.push aceEditor
 
   destroy: ->

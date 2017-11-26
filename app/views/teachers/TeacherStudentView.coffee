@@ -1,3 +1,4 @@
+require('app/styles/teachers/teacher-student-view.sass')
 RootView = require 'views/core/RootView'
 Campaigns = require 'collections/Campaigns'
 Classroom = require 'models/Classroom'
@@ -8,7 +9,7 @@ LevelSessions = require 'collections/LevelSessions'
 User = require 'models/User'
 Users = require 'collections/Users'
 CourseInstances = require 'collections/CourseInstances'
-require 'vendor/d3'
+require 'd3/d3.js'
 utils = require 'core/utils'
 
 
@@ -39,7 +40,7 @@ module.exports = class TeacherStudentView extends RootView
     @supermodel.trackRequest @courseInstances.fetchForClassroom(classroomID)
 
     @levels = new Levels()
-    @supermodel.trackRequest(@levels.fetchForClassroom(classroomID, {data: {project: 'name,original'}}))
+    @supermodel.trackRequest(@levels.fetchForClassroom(classroomID, {data: {project: 'name,original,i18n'}}))
     @urls = require('core/urls')
 
 
@@ -264,8 +265,12 @@ module.exports = class TeacherStudentView extends RootView
     lastPlayedString = ""
     lastPlayedString += @lastPlayedCourse.getTranslatedName() if @lastPlayedCourse
     lastPlayedString += ": " if @lastPlayedCourse and @lastPlayedLevel
-    lastPlayedString += @lastPlayedLevel.get('name') if @lastPlayedLevel
-    lastPlayedString += ", on " if @lastPlayedCourse or @lastPlayedLevel
+    lastPlayedString += @lastPlayedLevel.getTranslatedName() if @lastPlayedLevel
+    if @lastPlayedCourse or @lastPlayedLevel
+      if me.get('preferredLanguage', true) is 'en-US'
+        lastPlayedString += ", on "
+      else
+        lastPlayedString += ", "
     lastPlayedString += moment(@lastPlayedSession.get('changed')).format("LLLL") if @lastPlayedSession
     lastPlayedString
 

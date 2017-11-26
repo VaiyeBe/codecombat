@@ -5,7 +5,8 @@ Patches = require 'collections/Patches'
 PatchModal = require 'views/editor/PatchModal'
 template = require 'templates/i18n/i18n-edit-model-view'
 deltasLib = require 'core/deltas'
-ace = require 'ace'
+modelDeltas = require 'lib/modelDeltas'
+ace = require('lib/aceContainer')
 
 ###
   This view is the superclass for all views which Diplomats use to submit translations
@@ -101,6 +102,7 @@ module.exports = class I18NEditModelView extends RootView
     @onTranslationChanged(rowInfo, value)
 
   wrapRow: (title, key, enValue, toValue, path, format) ->
+    return unless enValue
     @translationList.push {
       title: title,
       key: key,
@@ -166,7 +168,7 @@ module.exports = class I18NEditModelView extends RootView
       return UNSAVED_CHANGES_MESSAGE
 
   onSubmitPatch: (e) ->
-    delta = @originalModel.getDeltaWith(@model)
+    delta = modelDeltas.getDeltaWith(@originalModel, @model)
     flattened = deltasLib.flattenDelta(delta)
     collection = _.string.underscored @model.constructor.className
     patch = new Patch({
