@@ -1,4 +1,4 @@
-app = require 'core/application'
+require('app/styles/courses/teacher-courses-view.sass')
 CocoCollection = require 'collections/CocoCollection'
 CocoModel = require 'models/CocoModel'
 Courses = require 'collections/Courses'
@@ -23,6 +23,7 @@ module.exports = class TeacherCoursesView extends RootView
 
   initialize: (options) ->
     super(options)
+    application.setHocCampaign('') # teachers playing levels from here return here
     @utils = require 'core/utils'
     @ownedClassrooms = new Classrooms()
     @ownedClassrooms.fetchMine({data: {project: '_id'}})
@@ -32,7 +33,7 @@ module.exports = class TeacherCoursesView extends RootView
       @supermodel.trackRequest @courses.fetch()
     else
       @supermodel.trackRequest @courses.fetchReleased()
-    @campaigns = new Campaigns()
+    @campaigns = new Campaigns([], { forceCourseNumbering: true })
     @supermodel.trackRequest @campaigns.fetchByType('course', { data: { project: 'levels,levelsUpdated' } })
     window.tracker?.trackEvent 'Classes Guides Loaded', category: 'Teachers', ['Mixpanel']
 

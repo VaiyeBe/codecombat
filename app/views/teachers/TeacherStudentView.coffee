@@ -1,3 +1,4 @@
+require('app/styles/teachers/teacher-student-view.sass')
 RootView = require 'views/core/RootView'
 Campaigns = require 'collections/Campaigns'
 Classroom = require 'models/Classroom'
@@ -8,7 +9,7 @@ LevelSessions = require 'collections/LevelSessions'
 User = require 'models/User'
 Users = require 'collections/Users'
 CourseInstances = require 'collections/CourseInstances'
-require 'vendor/d3'
+require 'd3/d3.js'
 utils = require 'core/utils'
 
 
@@ -39,7 +40,7 @@ module.exports = class TeacherStudentView extends RootView
     @supermodel.trackRequest @courseInstances.fetchForClassroom(classroomID)
 
     @levels = new Levels()
-    @supermodel.trackRequest(@levels.fetchForClassroom(classroomID, {data: {project: 'name,original'}}))
+    @supermodel.trackRequest(@levels.fetchForClassroom(classroomID, {data: {project: 'name,original,i18n'}}))
     @urls = require('core/urls')
 
 
@@ -82,7 +83,7 @@ module.exports = class TeacherStudentView extends RootView
     return unless @courses.loaded and @levels.loaded and @sessions?.loaded and @levelData
 
     @courseComparisonMap = []
-    for versionedCourse in @classroom.get('courses') or []
+    for versionedCourse in @classroom.getSortedCourses() or []
       # course = _.find @courses.models, (c) => c.id is versionedCourse._id
       course = @courses.get(versionedCourse._id)
       numbers = []
@@ -143,7 +144,7 @@ module.exports = class TeacherStudentView extends RootView
     }
 
 
-    for versionedCourse in @classroom.get('courses') or []
+    for versionedCourse in @classroom.getSortedCourses() or []
       # this does all of the courses, logic for whether student was assigned is in corresponding jade file
       vis = d3.select('#visualisation-'+versionedCourse._id)
       # TODO: continue if selector isn't found.
@@ -243,7 +244,7 @@ module.exports = class TeacherStudentView extends RootView
 
     # Find course for this level session, for it's name
     # Level.original is the original id, used for level versioning, and connects levels to level sessions
-    for versionedCourse in @classroom.get('courses') or []
+    for versionedCourse in @classroom.getSortedCourses() or []
       for level in versionedCourse.levels
         if level.original is session.get('level').original
           # Found the level for our level session in the classroom versioned courses
@@ -264,8 +265,12 @@ module.exports = class TeacherStudentView extends RootView
     lastPlayedString = ""
     lastPlayedString += @lastPlayedCourse.getTranslatedName() if @lastPlayedCourse
     lastPlayedString += ": " if @lastPlayedCourse and @lastPlayedLevel
-    lastPlayedString += @lastPlayedLevel.get('name') if @lastPlayedLevel
-    lastPlayedString += ", on " if @lastPlayedCourse or @lastPlayedLevel
+    lastPlayedString += @lastPlayedLevel.getTranslatedName() if @lastPlayedLevel
+    if @lastPlayedCourse or @lastPlayedLevel
+      if me.get('preferredLanguage', true) is 'en-US'
+        lastPlayedString += ", on "
+      else
+        lastPlayedString += ", "
     lastPlayedString += moment(@lastPlayedSession.get('changed')).format("LLLL") if @lastPlayedSession
     lastPlayedString
 
@@ -280,7 +285,7 @@ module.exports = class TeacherStudentView extends RootView
 
     # Create mapping of level to student progress
     @levelProgressMap = {}
-    for versionedCourse in @classroom.get('courses') or []
+    for versionedCourse in @classroom.getSortedCourses() or []
       for versionedLevel in versionedCourse.levels
         session = @levelSessionMap[versionedLevel.original]
         if session
@@ -295,7 +300,7 @@ module.exports = class TeacherStudentView extends RootView
     return unless @courses.loaded and @levels.loaded and @sessions?.loaded
 
     @levelData = []
-    for versionedCourse in @classroom.get('courses') or []
+    for versionedCourse in @classroom.getSortedCourses() or []
       course = @courses.get(versionedCourse._id)
       for versionedLevel in versionedCourse.levels
         playTime = 0 # TODO: this and timesPlayed should probably only count when the levels are completed

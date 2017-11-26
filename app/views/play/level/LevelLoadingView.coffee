@@ -1,7 +1,9 @@
+require('app/styles/play/level/level-loading-view.sass')
 CocoView = require 'views/core/CocoView'
-template = require 'templates/play/level/level_loading'
-ace = require 'ace'
+template = require 'templates/play/level/level-loading-view'
+ace = require('lib/aceContainer')
 utils = require 'core/utils'
+aceUtils = require 'core/aceUtils'
 SubscribeModal = require 'views/core/SubscribeModal'
 
 module.exports = class LevelLoadingView extends CocoView
@@ -16,8 +18,9 @@ module.exports = class LevelLoadingView extends CocoView
   subscriptions:
     'level:loaded': 'onLevelLoaded'  # If Level loads after level loading view.
     'level:session-loaded': 'onSessionLoaded'
-    'level:subscription-required': 'onSubscriptionRequired'  # If they'd need a subscription to start playing.
-    'level:course-membership-required': 'onCourseMembershipRequired'  # If they'd need a subscription to start playing.
+    'level:subscription-required': 'onSubscriptionRequired'  # If they'd need a subscription.
+    'level:course-membership-required': 'onCourseMembershipRequired'  # If they need to be added to a course.
+    'level:license-required': 'onLicenseRequired' # If they need a license.
     'subscribe-modal:subscribed': 'onSubscribed'
 
   shortcuts:
@@ -40,7 +43,7 @@ module.exports = class LevelLoadingView extends CocoView
     @aceEditors = []
     aceEditors = @aceEditors
     @$el.find('pre:has(code[class*="lang-"])').each ->
-      aceEditor = utils.initializeACE @, codeLanguage
+      aceEditor = aceUtils.initializeACE @, codeLanguage
       aceEditors.push aceEditor
 
   afterInsert: ->
@@ -93,7 +96,7 @@ module.exports = class LevelLoadingView extends CocoView
 
   finishShowingReady: =>
     return if @destroyed
-    showIntro = @getQueryVariable('intro')
+    showIntro = utils.getQueryVariable('intro')
     autoUnveil = not showIntro and (@options.autoUnveil or @session?.get('state').complete)
     if autoUnveil
       @startUnveiling()
@@ -205,15 +208,19 @@ module.exports = class LevelLoadingView extends CocoView
     @resize()
 
   onSubscriptionRequired: (e) ->
-    @$el.find('.level-loading-goals, .tip, .load-progress').hide()
+    @$el.find('.level-loading-goals, .tip, .progress-or-start-container').hide()
     @$el.find('.subscription-required').show()
 
   onCourseMembershipRequired: (e) ->
-    @$el.find('.level-loading-goals, .tip, .load-progress').hide()
+    @$el.find('.level-loading-goals, .tip, .progress-or-start-container').hide()
     @$el.find('.course-membership-required').show()
 
+  onLicenseRequired: (e) ->
+    @$el.find('.level-loading-goals, .tip, .progress-or-start-container').hide()
+    @$el.find('.license-required').show()
+
   onLoadError: (resource) ->
-    @$el.find('.level-loading-goals, .tip, .load-progress').hide()
+    @$el.find('.level-loading-goals, .tip, .progress-or-start-container').hide()
     @$el.find('.could-not-load').show()
 
   onClickStartSubscription: (e) ->
