@@ -1,4 +1,4 @@
-app = require 'core/application'
+require('app/styles/courses/courses-view.sass')
 RootView = require 'views/core/RootView'
 template = require 'templates/courses/courses-view'
 AuthModal = require 'views/core/AuthModal'
@@ -65,8 +65,7 @@ module.exports = class CoursesView extends RootView
     @hero.url = "/db/thang.type/#{heroOriginal}/version"
     # @hero.setProjection ['name','slug','soundTriggers','featureImages','gems','heroClass','description','components','extendedName','unlockLevelName','i18n']
     @supermodel.loadModel(@hero, 'hero')
-    @listenTo @hero, 'all', ->
-      @render()
+    @listenTo @hero, 'change', -> @render() if @supermodel.finished()
 
   afterInsert: ->
     super()
@@ -107,7 +106,7 @@ module.exports = class CoursesView extends RootView
         return if @destroyed
         @originalLevelMap[level.get('original')] = level for level in levels.models
         @render()
-      @supermodel.trackRequest(levels.fetchForClassroom(classroomID, { data: { project: 'original,primerLanguage,slug' }}))
+      @supermodel.trackRequest(levels.fetchForClassroom(classroomID, { data: { project: "original,primerLanguage,slug,i18n.#{me.get('preferredLanguage', true)}" }}))
 
   courseInstanceHasProject: (courseInstance) ->
     classroom = @classrooms.get(courseInstance.get('classroomID'))

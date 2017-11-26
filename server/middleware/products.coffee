@@ -18,6 +18,7 @@ get = wrap (req, res) ->
 
   # Remove old unsupported subscription products
   products = _.filter products, (p) -> p.name not in ['year_subscription', 'lifetime_subscription2']
+  products = _.filter(products, (p) -> p.i18nCoverage?) if req.query.view is 'i18n-coverage'
 
   for p in products
     if p.coupons?
@@ -68,6 +69,7 @@ productStubs = [
     amount: 100
     gems: 3500
     planID: 'basic'
+    payPalBillingPlanID: 'P-23R58281B73475317X2K7B4A'
   }
 
   {
@@ -97,6 +99,7 @@ productStubs = [
     amount: 0
     gems: 1500
     planID: 'basic'
+    payPalBillingPlanID: 'P-2KP02511G2731913DX2K4IKA'
   }
 
   {
@@ -117,6 +120,7 @@ productStubs = [
     name: 'brazil_lifetime_subscription'
     amount: 1001
     gems: 42000
+    coupons: [{code: 'c1', amount: 10}, {code: 'c2', amount: 99}]
   }
 ]
 

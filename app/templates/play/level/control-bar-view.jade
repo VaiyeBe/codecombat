@@ -1,20 +1,23 @@
-.left-cap
+- var includeHomeLink = application.getHocCampaign() || !((me.isStudent() || me.isTeacher()) && !view.course);
+if includeHomeLink
+  .left-cap
 .right-cap
 .center-chain
 .right-chain
 .wood-background
 
-.levels-link-area
-  a.levels-link(href=homeLink || "/")
-    .glyphicon.glyphicon-play
-    span(data-i18n=me.isSessionless() ? "nav.courses" : (ladderGame ? "general.ladder" : "nav.map")).home-text
+if includeHomeLink
+  .levels-link-area
+    a.levels-link(href=homeLink || "/", dir="ltr")
+      .glyphicon.glyphicon-play
+      span(data-i18n=me.isSessionless() ? "nav.courses" : (ladderGame ? "general.ladder" : "nav.map")).home-text
 
 .level-name-area-container
   .level-name-area
     if view.course
       .level-label= i18n(view.course.attributes, 'name')
     .level-name(title=difficultyTitle || "")
-      span #{view.levelNumber ? view.levelNumber + '. ' : ''}#{worldName.replace('Course: ', '')}
+      span(dir="auto") #{view.levelNumber ? view.levelNumber + '. ' : ''}#{worldName.replace('Course: ', '')}
       if levelDifficulty
         sup.level-difficulty= levelDifficulty
 

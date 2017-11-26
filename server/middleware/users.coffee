@@ -16,6 +16,8 @@ CourseInstance = require '../models/CourseInstance'
 facebook = require '../lib/facebook'
 gplus = require '../lib/gplus'
 TrialRequest = require '../models/TrialRequest'
+Campaign = require '../models/Campaign'
+Course = require '../models/Course'
 Achievement = require '../models/Achievement'
 UserPollsRecord = require '../models/UserPollsRecord'
 EarnedAchievement = require '../models/EarnedAchievement'
@@ -26,6 +28,8 @@ config = require '../../server_config'
 utils = require '../lib/utils'
 CLASubmission = require '../models/CLASubmission'
 Prepaid = require '../models/Prepaid'
+crypto = require 'crypto'
+{ makeHostUrl } = require '../commons/urls'
 
 module.exports =
   fetchByAge: wrap (req, res, next) ->
@@ -107,6 +111,8 @@ module.exports =
     # Delete personal subscription
     if userToDelete.get('stripe.subscriptionID')
       yield middleware.subscriptions.unsubscribeUser(req, userToDelete, false)
+    if userToDelete.get('payPal.billingAgreementID')
+      yield middleware.subscriptions.cancelPayPalBillingAgreementInternal(req)
 
     # Delete recipient subscription
     sponsorID = userToDelete.get('stripe.sponsorID')
@@ -171,7 +177,7 @@ module.exports =
         name: user.broadName()
       email_data:
         name: user.broadName()
-        verify_link: "http://codecombat.com/user/#{user._id}/verify/#{user.verificationCode(timestamp)}"
+        verify_link: makeHostUrl(req, "/user/#{user._id}/verify/#{user.verificationCode(timestamp)}")
     sendwithus.api.send context, (err, result) ->
     res.status(200).send({})
 
@@ -234,10 +240,10 @@ module.exports =
       throw new errors.Forbidden('You are already signed in.')
 
     { facebookID, facebookAccessToken, email, name } = req.body
-    unless _.all([facebookID, facebookAccessToken, not _.isEmpty(email), not _.isEmpty(name)])
-      throw new errors.UnprocessableEntity('Requires facebookID, facebookAccessToken, email, and name')
+    unless _.all([facebookID, facebookAccessToken, not _.isEmpty(email)])
+      throw new errors.UnprocessableEntity('Requires facebookID, facebookAccessToken, and email')
 
-    if yield User.findByName(name)
+    if name and yield User.findByName(name)
       throw new errors.Conflict('Username already taken', { i18n: 'server_error.username_taken' })
 
     facebookResponse = yield facebook.fetchMe(facebookAccessToken)
@@ -250,7 +256,9 @@ module.exports =
     if user
       throw new errors.Conflict('Email already taken', { i18n: 'server_error.email_taken' })
 
-    req.user.set({ facebookID, email, name, anonymous: false })
+    userData = { facebookID, email, anonymous: false }
+    userData.name = name if name
+    req.user.set(userData)
     yield module.exports.finishSignup(req, res)
 
   signupWithGPlus: wrap (req, res) ->
@@ -258,10 +266,10 @@ module.exports =
       throw new errors.Forbidden('You are already signed in.')
 
     { gplusID, gplusAccessToken, email, name } = req.body
-    unless _.all([gplusID, gplusAccessToken, not _.isEmpty(email), not _.isEmpty(name)])
-      throw new errors.UnprocessableEntity('Requires gplusID, gplusAccessToken, email, and name')
+    unless _.all([gplusID, gplusAccessToken, not _.isEmpty(email)])
+      throw new errors.UnprocessableEntity('Requires gplusID, gplusAccessToken, and email')
 
-    if yield User.findByName(name)
+    if name and yield User.findByName(name)
       throw new errors.Conflict('Username already taken', { i18n: 'server_error.username_taken' })
 
     gplusResponse = yield gplus.fetchMe(gplusAccessToken)
@@ -275,7 +283,9 @@ module.exports =
     if user
       throw new errors.Conflict('Email already taken', { i18n: 'server_error.email_taken' })
 
-    req.user.set({ gplusID, email, name, anonymous: false })
+    userData = { gplusID, email, anonymous: false }
+    userData.name = name if name
+    req.user.set(userData)
     yield module.exports.finishSignup(req, res)
 
   finishSignup: co.wrap (req, res) ->
@@ -289,7 +299,7 @@ module.exports =
 
     # post-successful account signup tasks
 
-    req.user.sendWelcomeEmail()
+    req.user.sendWelcomeEmail(req)
 
     # If person A creates a trial request without creating an account, then person B uses that computer
     # to create an account, then person A's trial request is associated with person B's account. To prevent
@@ -396,7 +406,7 @@ module.exports =
     unless req.user.isAdmin()
       throw new errors.Forbidden()
 
-    projection = name: 1, email: 1, dateCreated: 1, role: 1
+    projection = name: 1, email: 1, dateCreated: 1, role: 1, firstName: 1, lastName: 1
 
     search = adminSearch
     query = {
@@ -404,6 +414,7 @@ module.exports =
       $or: [
         {emailLower: search.toLowerCase()}
         {nameLower: search.toLowerCase()}
+        {slug: _.str.slugify(search)}
       ]
     }
     query.$or.push {_id: mongoose.Types.ObjectId(search)} if utils.isID search
@@ -437,11 +448,22 @@ module.exports =
     else if search.length > 5
       searchParts = search.split(/[.+@]/)
       if searchParts.length > 1
-        users = users.concat(yield User.find({emailLower: {$regex: '^' + searchParts[0]}}).select(projection))
+        users = users.concat(yield User.find({emailLower: {$regex: '^' + searchParts[0]}}).limit(50).select(projection))
 
     users = _.uniq(users, false, (u) -> u.id)
-
-    res.send(users)
+    
+    teachers = (user for user in users when user?.isTeacher())
+    trialRequests = yield TrialRequest.find({applicant: $in: (teacher._id for teacher in teachers)})
+    trialRequestMap = _.zipObject([t.get('applicant').toString(), t.toObject()] for t in trialRequests)
+    
+    toSend = _.map(users, (user) =>
+      userObject = user.toObject()
+      trialRequest = trialRequestMap[user.id]
+      if trialRequest
+        userObject._trialRequest = _.pick(trialRequest.properties, 'organization', 'district', 'nces_name', 'nces_district')
+      return userObject
+    )    
+    res.send(toSend)
 
 
   sphinxSearch: co.wrap (req, search) ->
@@ -501,5 +523,59 @@ module.exports =
         }
       })
     ]
-    return res.send(200)
+    return res.sendStatus(200)
 
+  getAvatar: wrap (req, res) ->
+    user = yield database.getDocFromHandle(req, User)
+    if not user
+      throw new errors.NotFound('User not found.')
+    fallback = req.query.fallback
+    size = req.query.s
+
+    hash = crypto.createHash('md5')
+    if user.get('email')
+      hash.update(_.trim(user.get('email')).toLowerCase())
+    else
+      hash.update(user.get('_id') + '')
+    emailHash = hash.digest('hex')
+
+    if thang = user.get('heroConfig')?.thangType
+      fallback ?= "/file/db/thang.type/#{thang}/portrait.png"
+      
+    fallback ?= makeHostUrl(req, '/file/db/thang.type/52a00d55cf1818f2be00000b/portrait.png')
+    unless /^http/.test fallback
+      fallback = makeHostUrl(req, fallback)
+    combinedPhotoURL = "https://secure.gravatar.com/avatar/#{emailHash}?s=#{size}&default=#{encodeURI(encodeURI(fallback))}"
+    
+    res.redirect(combinedPhotoURL)
+    res.end()
+
+
+  getCourseInstances: wrap (req, res) ->
+    user = yield database.getDocFromHandle(req, User)
+    if not user
+      throw new errors.NotFound('User not found')
+      
+    unless req.user.isAdmin() or req.user.id is user.id
+      throw new errors.Forbidden()
+      
+    if user.isTeacher()
+      query = { ownerID: req.user._id }
+    else
+      query = { members: req.user._id }
+      
+    if req.query.campaignSlug
+      campaign = yield Campaign.findBySlug(req.query.campaignSlug).select({_id:1})
+      if not campaign
+        throw new errors.NotFound('Campaign not found')
+
+      campaignID = campaign._id
+      course = yield Course.findOne({ campaignID }).select({_id: 1})
+      query.courseID = course._id
+      
+    dbq = CourseInstance.find(query)
+    dbq.limit(parse.getLimitFromReq(req))
+    dbq.skip(parse.getSkipFromReq(req))
+    dbq.select(parse.getProjectFromReq(req))
+    courseInstances = yield dbq.exec()
+    res.status(200).send(ci.toObject({req}) for ci in courseInstances)

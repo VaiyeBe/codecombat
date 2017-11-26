@@ -13,12 +13,7 @@ regJoin = (s) -> new RegExp(s.replace(/\//g, '[\\\/\\\\]'))
 
 gameLibraries = [
   'register-game-libraries'
-  'easeljs'
-  'movieclip'
-  'tweenjs'
-  'soundjs'
-  'SpriteContainer'
-  'SpriteStage'
+  'createjs'
   'ShaderParticles'
   'deku'
   'htmlparser2'
@@ -120,8 +115,8 @@ exports.config =
 
         #- vendor.js, all the vendor libraries
         'javascripts/vendor.js': [
-          regJoin('^vendor/scripts/(?!(Box2d|coffeescript|difflib|diffview|jasmine|co|' + gameLibraries + '))')
-          regJoin('^bower_components/(?!(aether|d3|treema|three.js|esper.js|jquery-ui|' + gameLibraries  + '))')
+          regJoin('^vendor/scripts/(?!(coffeescript|difflib|diffview|jasmine|co|' + gameLibraries + '))')
+          regJoin('^bower_components/(?!(aether|d3|treema|three.js|esper.js|jquery-ui|vimeo-player-js|' + gameLibraries  + '))')
           'bower_components/treema/treema-utils.js'
         ]
 
@@ -132,7 +127,7 @@ exports.config =
         ],
 
         'javascripts/whole-vendor.js': if TRAVIS then [
-          regJoin('^vendor/scripts/(?!(Box2d|jasmine|register-game-libraries))')
+          regJoin('^vendor/scripts/(?!(jasmine|register-game-libraries))')
           regJoin('^bower_components/(?!aether|esper.js)')
         ] else []
 
@@ -145,12 +140,22 @@ exports.config =
         'javascripts/lodash.js': regJoin('^bower_components/lodash/dist/lodash.js')
         #'javascripts/aether.js': regJoin('^bower_components/aether/build/aether.js')
         'javascripts/esper.js': 'bower_components/esper.js/esper.js'
+<<<<<<< HEAD
         #'javascripts/app/vendor/aether-coffeescript.js': 'bower_components/aether/build/coffeescript.js'
         #'javascripts/app/vendor/aether-javascript.js': 'bower_components/aether/build/javascript.js'
         #'javascripts/app/vendor/aether-lua.js': 'bower_components/aether/build/lua.js'
         #'javascripts/app/vendor/aether-java.js': 'bower_components/aether/build/java.js'
         #'javascripts/app/vendor/aether-python.js': 'bower_components/aether/build/python.js'
         #'javascripts/app/vendor/aether-html.js': 'bower_components/aether/build/html.js'
+=======
+        'javascripts/app/vendor/aether-coffeescript.js': 'bower_components/aether/build/coffeescript.js'
+        'javascripts/app/vendor/aether-javascript.js': 'bower_components/aether/build/javascript.js'
+        'javascripts/app/vendor/aether-lua.js': 'bower_components/aether/build/lua.js'
+        'javascripts/app/vendor/aether-java.js': 'bower_components/aether/build/java.js'
+        'javascripts/app/vendor/aether-python.js': 'bower_components/aether/build/python.js'
+        'javascripts/app/vendor/aether-html.js': 'bower_components/aether/build/html.js'
+        'javascripts/app/vendor/vimeo-player-js.js': 'bower_components/vimeo-player-js/dist/player.min.js'
+>>>>>>> refs/remotes/codecombat/master
 
         # Any vendor libraries we don't want the client to load immediately
         'javascripts/app/vendor/d3.js': regJoin('^bower_components/d3')
@@ -186,11 +191,7 @@ exports.config =
           # Twitter Bootstrap jquery plugins
           'bower_components/bootstrap/dist/bootstrap.js'
           # CreateJS dependencies
-          'vendor/scripts/easeljs-NEXT.combined.js'
-          'vendor/scripts/preloadjs-NEXT.combined.js'
-          'vendor/scripts/soundjs-NEXT.combined.js'
-          'vendor/scripts/tweenjs-NEXT.combined.js'
-          'vendor/scripts/movieclip-NEXT.min.js'
+          'vendor/scripts/createjs.js'
           # Validated Backbone Mediator dependencies
           'bower_components/tv4/tv4.js'
           # Aether before box2d for some strange Object.defineProperty thing

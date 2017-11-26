@@ -3,6 +3,7 @@ SuperModel = require 'models/SuperModel'
 utils = require 'core/utils'
 CocoClass = require 'core/CocoClass'
 loadSegmentIo = require('core/services/segment')
+api = require('core/api')
 
 debugAnalytics = false
 targetInspectJSLevelSlugs = ['cupboards-of-kithgard']
@@ -93,8 +94,8 @@ module.exports = class Tracker extends CocoClass
 
     # Mixpanel
     # https://mixpanel.com/help/reference/javascript
-    mixpanel?.identify(me.id)
-    mixpanel?.register(traits)
+    # mixpanel?.identify(me.id)
+    # mixpanel?.register(traits)
 
     if me.isTeacher() and @segmentLoaded
       traits.createdAt = me.get 'dateCreated'  # Intercom, at least, wants this
@@ -102,8 +103,9 @@ module.exports = class Tracker extends CocoClass
 
   trackPageView: (includeIntegrations=[]) ->
     includeMixpanel = (name) ->
-      mixpanelIncludes = []
-      name in mixpanelIncludes or /courses|students|teachers/ig.test(name)
+      # mixpanelIncludes = []
+      # name in mixpanelIncludes or /courses|students|teachers/ig.test(name)
+      false
 
     name = Backbone.history.getFragment()
     url = "/#{name}"
@@ -116,8 +118,9 @@ module.exports = class Tracker extends CocoClass
     ga? 'send', 'pageview', url
     ga?('codeplay.send', 'pageview', url) if features.codePlay
     window.snowplow 'trackPageView'
+
     # Mixpanel
-    mixpanel?.track('page viewed', 'page name' : name, url : url) if includeMixpanel(name)
+    # mixpanel?.track('page viewed', 'page name' : name, url : url) if includeMixpanel(name)
 
     if me.isTeacher() and @segmentLoaded
       options = {}
@@ -152,7 +155,7 @@ module.exports = class Tracker extends CocoClass
 
     # Mixpanel
     # Only log explicit events for now
-    mixpanel?.track(action, properties) if 'Mixpanel' in includeIntegrations
+    # mixpanel?.track(action, properties) if 'Mixpanel' in includeIntegrations
 
     if me.isTeacher() and @segmentLoaded
       options = {}
@@ -171,6 +174,12 @@ module.exports = class Tracker extends CocoClass
     if event in ['Clicked Start Level', 'Inventory Play', 'Heard Sprite', 'Started Level', 'Saw Victory', 'Click Play', 'Choose Inventory', 'Homepage Loaded', 'Change Hero']
       delete properties.label
 
+    if event is 'View Load' # TODO: Update snowplow schema to include these
+      delete properties.totalEssentialEncodedBodySize
+      delete properties.totalEssentialTransferSize
+      delete properties.cachedEssentialResources
+      delete properties.totalEssentialResources
+
     # SnowPlow
     snowplowAction = event.toLowerCase().replace(/[^a-z0-9]+/ig, '_')
     properties.user = me.id
@@ -178,7 +187,7 @@ module.exports = class Tracker extends CocoClass
     #console.log "SnowPlow", snowplowAction, properties
 
     try
-      schema = require("schemas/events/#{snowplowAction}")
+      schema = require("schemas/events/" + snowplowAction + ".json")
     catch
       console.warn('Schema not found for snowplow action: ', snowplowAction, properties)
       return
@@ -210,12 +219,7 @@ module.exports = class Tracker extends CocoClass
     properties[key] = value for key, value of @explicitTraits if @explicitTraits?
     console.log 'Tracking internal analytics event:', event, properties if debugAnalytics
 
-    request = @supermodel.addRequestResource {
-      url: '/db/analytics.log.event/-/log_event'
-      data: {event: event, properties: properties}
-      method: 'POST'
-    }, 0
-    request.load()
+    api.analyticsLogEvents.post({event, properties})
 
   trackTiming: (duration, category, variable, label) ->
     # https://developers.google.com/analytics/devguides/collection/analyticsjs/user-timings

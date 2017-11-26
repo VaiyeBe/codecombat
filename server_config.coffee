@@ -12,6 +12,8 @@ if cluster.worker?
 config.unittest = global.testing
 config.proxy = process.env.COCO_PROXY
 
+config.timeout = parseInt(process.env.COCO_TIMEOUT) or 60*1000
+
 config.chinaDomain = "cn.codecombat.com;ccombat.cn;contributors.codecombat.com"
 config.brazilDomain = "br.codecombat.com;contributors.codecombat.com"
 config.port = process.env.COCO_PORT or process.env.COCO_NODE_PORT or process.env.PORT  or 3000
@@ -155,5 +157,10 @@ if fs.existsSync path.join(__dirname, '.build_info.json')
 # This logs a stack trace every time an endpoint sends a response or throws an error.
 # It's great for finding where a mystery endpoint is!
 config.TRACE_ROUTES = process.env.TRACE_ROUTES?
+
+# Enables server-side gzip compression for network responses
+# Only use this if testing network response sizes in development
+# (In production, CloudFlare compresses things for us!)
+config.forceCompression = process.env.COCO_FORCE_COMPRESSION?
 
 module.exports = config

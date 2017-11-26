@@ -1,3 +1,4 @@
+require('app/styles/play/campaign-view.sass')
 RootView = require 'views/core/RootView'
 template = require 'templates/play/campaign-view'
 LevelSession = require 'models/LevelSession'
@@ -15,7 +16,7 @@ SubscribeModal = require 'views/core/SubscribeModal'
 LeaderboardModal = require 'views/play/modal/LeaderboardModal'
 Level = require 'models/Level'
 utils = require 'core/utils'
-require 'vendor/three'
+require 'three'
 ParticleMan = require 'core/ParticleMan'
 ShareProgressModal = require 'views/play/modal/ShareProgressModal'
 UserPollsRecord = require 'models/UserPollsRecord'
@@ -31,8 +32,18 @@ Classroom = require 'models/Classroom'
 Course = require 'models/Course'
 CourseInstance = require 'models/CourseInstance'
 Levels = require 'collections/Levels'
+payPal = require('core/services/paypal')
+createjs = require 'lib/createjs-parts'
+PlayItemsModal = require 'views/play/modal/PlayItemsModal'
+PlayHeroesModal = require 'views/play/modal/PlayHeroesModal'
+PlayAchievementsModal = require 'views/play/modal/PlayAchievementsModal'
+BuyGemsModal = require 'views/play/modal/BuyGemsModal'
+ContactModal = require 'views/core/ContactModal'
+require('vendor/scripts/jquery-ui-1.11.1.custom')
+require('vendor/styles/jquery-ui-1.11.1.custom.css')
+fetchJson = require 'core/api/fetch-json'
 
-require 'game-libraries'
+require 'lib/game-libraries'
 
 class LevelSessionsCollection extends CocoCollection
   url: ''
@@ -74,6 +85,12 @@ module.exports = class CampaignView extends RootView
     'click .poll': 'showPoll'
     'click #brain-pop-replay-btn': 'onClickBrainPopReplayButton'
     'click .premium-menu-icon': 'onClickPremiumButton'
+    'click [data-toggle="coco-modal"][data-target="play/modal/PlayItemsModal"]': 'openPlayItemsModal'
+    'click [data-toggle="coco-modal"][data-target="play/modal/PlayHeroesModal"]': 'openPlayHeroesModal'
+    'click [data-toggle="coco-modal"][data-target="play/modal/PlayAchievementsModal"]': 'openPlayAchievementsModal'
+    'click [data-toggle="coco-modal"][data-target="play/modal/BuyGemsModal"]': 'openBuyGemsModal'
+    'click [data-toggle="coco-modal"][data-target="core/ContactModal"]': 'openContactModal'
+    'click [data-toggle="coco-modal"][data-target="core/CreateAccountModal"]': 'openCreateAccountModal'
 
   shortcuts:
     'shift+s': 'onShiftS'
@@ -90,14 +107,39 @@ module.exports = class CampaignView extends RootView
     @levelDifficultyMap = {}
 
     if utils.getQueryVariable('hour_of_code')
+      if me.isStudent() or me.isTeacher()
+        if @terrain is 'dungeon'
+          newCampaign = 'intro'
+          api.users.getCourseInstances({ userID: me.id, campaignSlug: newCampaign }, { data: { project: '_id' } })
+          .then (courseInstances) =>
+            if courseInstances.length
+              courseInstanceID = _.first(courseInstances)._id
+              application.router.navigate("/play/#{newCampaign}?course-instance=#{courseInstanceID}", { trigger: true, replace: true })
+            else
+              application.router.navigate((if me.isStudent() then '/students' else '/teachers'), {trigger: true, replace: true})
+              noty({text: 'Please create or join a classroom first', layout: 'topCenter', timeout: 8000, type: 'success'})
+          return
       me.set('hourOfCode', true)
       me.patch()
-      pixelCode = if @terrain is 'game-dev-hoc' then 'code_combat_gamedev' else 'code_combat'
+      pixelCode = switch @terrain
+        when 'game-dev-hoc' then 'code_combat_gamedev'
+        when 'game-dev-hoc-2' then 'code_combat_build_arcade'
+        else 'code_combat'
       $('body').append($("<img src='https://code.org/api/hour/begin_#{pixelCode}.png' style='visibility: hidden;'>"))
-
-    # HoC: Fake us up a "mode" for HeroVictoryModal to return hero without levels realizing they're in a copycat campaign, or clear it if we started playing.
-    shouldReturnToGameDevHoc = @terrain is 'game-dev-hoc'
-    storage.save 'should-return-to-game-dev-hoc', shouldReturnToGameDevHoc
+    else if me.isTeacher() and not utils.getQueryVariable('course-instance') and not application.getHocCampaign()
+      # redirect teachers away from home campaigns
+      application.router.navigate('/teachers', { trigger: true, replace: true })
+      return
+    else if location.pathname is '/paypal/subscribe-callback'
+      @payPalToken = utils.getQueryVariable('token')
+      api.users.executeBillingAgreement({userID: me.id, token: @payPalToken})
+      .then (billingAgreement) =>
+        value = Math.round(parseFloat(billingAgreement?.plan?.payment_definitions?[0].amount?.value ? 0) * 100)
+        application.tracker?.trackEvent 'Finished subscription purchase', { value, service: 'paypal' }
+        noty({text: $.i18n.t('subscribe.confirmation'), layout: 'topCenter', timeout: 8000})
+        me.fetch(cache: false, success: => @render?())
+      .catch (err) =>
+        console.error(err)
 
     if window.serverConfig.picoCTF
       @supermodel.addRequestResource(url: '/picoctf/problems', success: (@picoCTFProblems) =>).load()
@@ -128,9 +170,9 @@ module.exports = class CampaignView extends RootView
 
     @supermodel.loadCollection(@earnedAchievements, 'achievements', {cache: false})
 
-    if @getQueryVariable('course-instance')?
+    if utils.getQueryVariable('course-instance')?
       @courseLevelsFake = {}
-      @courseInstanceID = @getQueryVariable('course-instance')
+      @courseInstanceID = utils.getQueryVariable('course-instance')
       @courseInstance = new CourseInstance(_id: @courseInstanceID)
       jqxhr = @courseInstance.fetch()
       @supermodel.trackRequest(jqxhr)
@@ -236,6 +278,30 @@ module.exports = class CampaignView extends RootView
     unless @campaign
       @$el.find('.game-controls, .user-status').removeClass 'hidden'
 
+  openPlayItemsModal: (e) ->
+    e.stopPropagation()
+    @openModalView new PlayItemsModal()
+
+  openPlayHeroesModal: (e) ->
+    e.stopPropagation()
+    @openModalView new PlayHeroesModal()
+
+  openPlayAchievementsModal: (e) ->
+    e.stopPropagation()
+    @openModalView new PlayAchievementsModal()
+
+  openBuyGemsModal: (e) ->
+    e.stopPropagation()
+    @openModalView new BuyGemsModal()
+
+  openContactModal: (e) ->
+    e.stopPropagation()
+    @openModalView new ContactModal()
+
+  openCreateAccountModal: (e) ->
+    e.stopPropagation()
+    @openModalView new CreateAccountModal()
+
   getLevelPlayCounts: ->
     return unless me.isAdmin()
     return  # TODO: get rid of all this? It's redundant with new campaign editor analytics, unless we want to show player counts on leaderboards buttons.
@@ -255,18 +321,23 @@ module.exports = class CampaignView extends RootView
     levelPlayCountsRequest.load()
 
   onLoaded: ->
+    # HoC: Fake us up a "mode" for HeroVictoryModal to return hero without levels realizing they're in a copycat campaign, or clear it if we started playing.
+    application.setHocCampaign(if @campaign?.get('type') is 'hoc' then @campaign.get('slug') else '')
+
     return if @fullyRendered
     @fullyRendered = true
     @render()
     @checkForUnearnedAchievements()
     @preloadTopHeroes() unless me.get('heroConfig')?.thangType
-    @$el.find('#campaign-status').delay(4000).animate({top: "-=58"}, 1000) unless @terrain is 'dungeon' or @courseStats?
+    @$el.find('#campaign-status').delay(4000).animate({top: "-=58"}, 1000) if @terrain in ['forest', 'desert']
+    if @campaign and @isRTL utils.i18n(@campaign.attributes, 'fullName')
+      @$('.campaign-name').attr('dir', 'rtl')
     if not me.get('hourOfCode') and @terrain
       if features.codePlay
         if me.get('anonymous') and me.get('lastLevel') is 'true-names' and me.level() < 5
           @openModalView new CodePlayCreateAccountModal()
       else if me.get('anonymous') and me.get('lastLevel') is 'shadow-guard' and me.level() < 4 and not features.noAuth
-        @openModalView new CreateAccountModal supermodel: @supermodel, showSignupRationale: true
+        @promptForSignup()
       else if me.get('name') and me.get('lastLevel') in ['forgetful-gemsmith', 'signs-and-portents'] and
       me.level() < 5 and not (me.get('ageRange') in ['18-24', '25-34', '35-44', '45-100']) and
       not storage.load('sent-parent-email') and not me.isPremium()
@@ -341,6 +412,7 @@ module.exports = class CampaignView extends RootView
     context.requiresSubscription = @requiresSubscription
     context.editorMode = @editorMode
     context.adjacentCampaigns = _.filter _.values(_.cloneDeep(@campaign?.get('adjacentCampaigns') or {})), (ac) =>
+      return false if me.isStudent() or me.isTeacher()
       if ac.showIfUnlocked and not @editorMode
         return false if _.isString(ac.showIfUnlocked) and ac.showIfUnlocked not in me.levels()
         return false if _.isArray(ac.showIfUnlocked) and _.intersection(ac.showIfUnlocked, me.levels()).length <= 0
@@ -384,6 +456,9 @@ module.exports = class CampaignView extends RootView
             _.find(@campaigns.models, id: acID)?.locked = false if ac.showIfUnlocked in me.levels()
           else if _.isArray(ac.showIfUnlocked)
             _.find(@campaigns.models, id: acID)?.locked = false if _.intersection(ac.showIfUnlocked, me.levels()).length > 0
+
+    if @terrain and _.string.contains(@terrain, 'hoc') and me.isTeacher()
+      context.showGameDevAlert = true
 
     context
 
@@ -459,23 +534,22 @@ module.exports = class CampaignView extends RootView
 
   afterInsert: ->
     super()
-    if @getQueryVariable('signup') and not me.get('email')
+    if utils.getQueryVariable('signup') and not me.get('email')
       return @promptForSignup()
-    if not me.isPremium() and (@isPremiumCampaign() or (@options.worldComplete and not features.noAuth))
+    if not me.isPremium() and (@isPremiumCampaign() or (@options.worldComplete and not features.noAuth and not me.get('hourOfCode')))
       if not me.get('email')
         return @promptForSignup()
       campaignSlug = window.location.pathname.split('/')[2]
       return @promptForSubscription campaignSlug, 'premium campaign visited'
 
   promptForSignup: ->
-    return if features.noAuth
-
+    return if @terrain and 'hoc' in @terrain
+    return if features.noAuth or @campaign?.get('type') is 'hoc'
     @endHighlight()
-    authModal = new CreateAccountModal supermodel: @supermodel
-    authModal.mode = 'signup'
-    @openModalView authModal
+    @openModalView(new CreateAccountModal(supermodel: @supermodel))
 
   promptForSubscription: (slug, label) ->
+    return console.log('Game dev HoC does not encourage subscribing.') if @campaign?.get('type') is 'hoc'
     @endHighlight()
     @openModalView new SubscribeModal()
     # TODO: Added levelID on 2/9/16. Remove level property and associated AnalyticsLogEvent 'properties.level' index later.
@@ -483,6 +557,8 @@ module.exports = class CampaignView extends RootView
 
   isPremiumCampaign: (slug) ->
     slug ||= window.location.pathname.split('/')[2]
+    return unless slug
+    return false if 'hoc' in slug
     /campaign-(game|web)-dev-\d/.test slug
 
   showAds: ->
@@ -507,7 +583,7 @@ module.exports = class CampaignView extends RootView
       level.disabled = false if me.isInGodMode()
 
       level.color = 'rgb(255, 80, 60)'
-      unless @course?
+      unless @course? or @campaign?.get('type') is 'hoc'
         level.color = 'rgb(80, 130, 200)' if level.requiresSubscription and not features.codePlay
         level.color = 'rgb(200, 80, 200)' if level.adventurer
 
@@ -535,7 +611,7 @@ module.exports = class CampaignView extends RootView
           """
           level.color = 'rgb(80, 130, 200)' if problem.solved
 
-      level.hidden = level.locked
+      level.hidden = level.locked and @campaign?.get('type') isnt 'hoc'
       if level.concepts?.length
         level.displayConcepts = level.concepts
         maxConcepts = 6
@@ -550,7 +626,7 @@ module.exports = class CampaignView extends RootView
   countLevels: (orderedLevels) ->
     count = total: 0, completed: 0
 
-    if @campaign?.get('slug') is 'game-dev-hoc'
+    if @campaign?.get('type') is 'hoc'
       # HoC: Just order left-to-right instead of looking at unlocks, which we don't use for this copycat campaign
       orderedLevels = _.sortBy orderedLevels, (level) -> level.position.x
       count.completed++ for level in orderedLevels when @levelStatusMap[level.slug] is 'complete'
@@ -580,14 +656,14 @@ module.exports = class CampaignView extends RootView
     dontPointTo = ['lost-viking', 'kithgard-mastery']  # Challenge levels we don't want most players bashing heads against
     subscriptionPrompts = [{slug: 'boom-and-bust', unless: 'defense-of-plainswood'}]
 
-    if @campaign?.get('slug') is 'game-dev-hoc'
+    if @campaign?.get('type') is 'hoc'
       # HoC: Just order left-to-right instead of looking at unlocks, which we don't use for this copycat campaign
       orderedLevels = _.sortBy orderedLevels, (level) -> level.position.x
       for level in orderedLevels
         if @levelStatusMap[level.slug] isnt 'complete'
           level.next = true
           # Unlock and re-annotate this level
-          # May not be unlocked/awarded due to different game-dev-hoc progression using mostly shared levels
+          # May not be unlocked/awarded due to different HoC progression using mostly shared levels
           level.locked = false
           level.hidden = level.locked
           level.disabled = false
@@ -683,6 +759,7 @@ module.exports = class CampaignView extends RootView
 
   testParticles: ->
     return unless @campaign?.loaded and $.browser.chrome  # Sometimes this breaks in non-Chrome browsers, according to A/B tests.
+    return if @campaign.get('type') is 'hoc'
     @particleMan ?= new ParticleMan()
     @particleMan.removeEmitters()
     @particleMan.attach @$el.find('.map')
@@ -697,7 +774,7 @@ module.exports = class CampaignView extends RootView
       particleKey.push 'hero' if level.unlocksHero and not level.unlockedHero
       #particleKey.push 'item' if level.slug is 'robot-ragnarok'  # TODO: generalize
       continue if particleKey.length is 2  # Don't show basic levels
-      continue unless level.hidden or _.intersection(particleKey, ['item', 'hero-ladder', 'replayable', 'game-dev']).length
+      continue unless level.hidden or _.intersection(particleKey, ['item', 'hero-ladder', 'replayable']).length
       @particleMan.addEmitter level.position.x / 100, level.position.y / 100, particleKey.join('-')
 
   onMouseEnterPortals: (e) ->
@@ -743,7 +820,13 @@ module.exports = class CampaignView extends RootView
     levelURL = "/db/level/#{levelSlug}"
     level = new Level().setURL levelURL
     level = @supermodel.loadModel(level, null, 0).model
-    sessionURL = "/db/level/#{levelSlug}/session"
+
+    # Note that this doesn't just preload the level. For sessions which require the
+    # campaign to be included, it also creates the session. If this code is changed,
+    # make sure to accommodate campaigns with free-in-certain-campaign-contexts levels,
+    # such as game dev levels in game-dev-hoc.
+    sessionURL = "/db/level/#{levelSlug}/session?campaign=#{@campaign.id}"
+
     @preloadedSession = new LevelSession().setURL sessionURL
     @listenToOnce @preloadedSession, 'sync', @onSessionPreloaded
     @preloadedSession = @supermodel.loadModel(@preloadedSession, {cache: false}).model
@@ -793,7 +876,13 @@ module.exports = class CampaignView extends RootView
     level = _.find _.values(@getLevels()), slug: levelSlug
 
     requiresSubscription = level.requiresSubscription or (me.isOnPremiumServer() and not (level.slug in ['dungeons-of-kithgard', 'gems-in-the-deep', 'shadow-guard', 'forgetful-gemsmith', 'signs-and-portents', 'true-names']))
-    canPlayAnyway = not @requiresSubscription or level.adventurer or @levelStatusMap[level.slug] or (features.codePlay and codePlay.canPlay(level.slug))
+    canPlayAnyway = _.any([
+      not @requiresSubscription
+      level.adventurer
+      @levelStatusMap[level.slug]
+      (features.codePlay and codePlay.canPlay(level.slug))
+      @campaign.get('type') is 'hoc'
+    ])
     if requiresSubscription and not canPlayAnyway
       @promptForSubscription levelSlug, 'map level clicked'
     else
@@ -919,7 +1008,7 @@ module.exports = class CampaignView extends RootView
     button.toggleClass 'vol-off', volume <= 0.0
     button.toggleClass 'vol-down', 0.0 < volume < 1.0
     button.toggleClass 'vol-up', volume >= 1.0
-    createjs.Sound.setVolume(if volume is 1 then 0.6 else volume)  # Quieter for now until individual sound FX controls work again.
+    createjs.Sound.volume = if volume is 1 then 0.6 else volume  # Quieter for now until individual sound FX controls work again.
     if volume isnt me.get 'volume'
       me.set 'volume', volume
       me.patch()
@@ -1101,6 +1190,10 @@ module.exports = class CampaignView extends RootView
 
   maybeShowPendingAnnouncement: () ->
     return false if me.freeOnly() # TODO: handle announcements that can be shown to free only servers
+    return false if @payPalToken
+    return false if me.isStudent()
+    return false if application.getHocCampaign()
+    return false if me.get('hourOfCode')
     latest = window.serverConfig.latestAnnouncement
     myLatest = me.get('lastAnnouncementSeen')
     return unless typeof latest is 'number'
@@ -1163,8 +1256,13 @@ module.exports = class CampaignView extends RootView
     return true
 
   shouldShow: (what) ->
-    isStudent = me.get('role') in ['student']
+    isStudentOrTeacher = me.isStudent() or me.isTeacher()
     isIOS = me.get('iosIdentifierForVendor') || application.isIPadApp
+
+    if what is 'classroom-level-play-button'
+      isValidStudent = (me.isStudent() and me.get('courseInstances')?.length)
+      isValidTeacher = me.isTeacher()
+      return (isValidStudent or isValidTeacher) and not application.getHocCampaign()
 
     if features.codePlay and what in ['clans', 'settings']
       return false
@@ -1176,24 +1274,24 @@ module.exports = class CampaignView extends RootView
       return !me.finishedAnyLevels() && serverConfig.showCodePlayAds && !features.noAds && me.get('role') isnt 'student'
 
     if what in ['status-line']
-      return !isStudent
+      return !isStudentOrTeacher
 
     if what in ['gems']
-      return !isStudent
+      return !isStudentOrTeacher
 
     if what in ['level', 'xp']
-      return !isStudent
+      return !isStudentOrTeacher
 
     if what in ['settings', 'leaderboard', 'back-to-campaigns', 'poll', 'items', 'heros', 'achievements', 'clans', 'poll']
-      return !isStudent
+      return !isStudentOrTeacher
 
     if what in ['back-to-classroom']
-      return isStudent
+      return isStudentOrTeacher and not application.getHocCampaign()
 
     if what in ['buy-gems']
-      return not (isIOS or me.freeOnly() or isStudent)
+      return not (isIOS or me.freeOnly() or isStudentOrTeacher or (application.getHocCampaign() and me.isAnonymous()))
 
     if what in ['premium']
-      return not (me.isPremium() or isIOS or me.freeOnly() or isStudent)
+      return not (me.isPremium() or isIOS or me.freeOnly() or isStudentOrTeacher or (application.getHocCampaign() and me.isAnonymous()))
 
     return true

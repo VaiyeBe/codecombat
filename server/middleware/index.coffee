@@ -1,9 +1,13 @@
 module.exports =
   achievements: require './achievements'
   admin: require './admin'
+  analyticsLogEvents: require './analytics-log-events'
+  analyticsPerDay: require './analytics-perday'
+  analyticsStripeInvoices: require './analytics-stripe-invoices'
   api: require './api'
   auth: require './auth'
   branches: require './branches'
+  clans: require './clans'
   classrooms: require './classrooms'
   apiClients: require './api-clients'
   campaigns: require './campaigns'

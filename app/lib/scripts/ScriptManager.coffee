@@ -1,6 +1,7 @@
 CocoClass = require 'core/CocoClass'
 CocoView = require 'views/core/CocoView'
 {scriptMatchesEventPrereqs} = require './../world/script_event_prereqs'
+utils = require 'core/utils'
 
 allScriptModules = []
 allScriptModules.push(require './SpriteScriptModule')
@@ -44,7 +45,7 @@ module.exports = ScriptManager = class ScriptManager extends CocoClass
     @originalScripts = @filterScripts(options.scripts)
     @session = options.session
     @levelID = options.levelID
-    @debugScripts = application.isIPadApp or CocoView.getQueryVariable 'dev'
+    @debugScripts = application.isIPadApp or utils.getQueryVariable 'dev'
     @initProperties()
     @addScriptSubscriptions()
     @beginTicking()
@@ -240,7 +241,6 @@ module.exports = ScriptManager = class ScriptManager extends CocoClass
     @scriptInProgress = true
     @currentTimeouts = []
     scriptLabel = "#{nextNoteGroup.scriptID} - #{nextNoteGroup.name}"
-    application.tracker?.trackEvent 'Script Started', {levelID: @levelID, label: scriptLabel, ls: @session?.get('_id')}, ['Google Analytics']
     console.debug "SCRIPT: Starting note group '#{nextNoteGroup.name}'" if @debugScripts
     for module in nextNoteGroup.modules
       @processNote(note, nextNoteGroup) for note in module.startNotes()
@@ -302,7 +302,6 @@ module.exports = ScriptManager = class ScriptManager extends CocoClass
     @ending = true
     return unless @currentNoteGroup?
     scriptLabel = "#{@currentNoteGroup.scriptID} - #{@currentNoteGroup.name}"
-    application.tracker?.trackEvent 'Script Ended', {levelID: @levelID, label: scriptLabel, ls: @session?.get('_id')}, ['Google Analytics']
     console.debug "SCRIPT: Ending note group '#{@currentNoteGroup.name}'" if @debugScripts
     clearTimeout(timeout) for timeout in @currentTimeouts
     for module in @currentNoteGroup.modules
